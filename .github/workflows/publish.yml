@@ -1,0 +1,56 @@
+name: publish
+
+# Tokenless OIDC publish to JSR. The id-token permission IS the credential —
+# there is no secret in this repo. JSR requires the package to be linked to this
+# GitHub repository for this to be permitted.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: "2.9.5"
+
+      - run: deno fmt --check
+      - run: deno lint
+      - run: deno check mod.ts mod.test.ts
+      - run: deno test mod.test.ts
+
+      # JSR versions are immutable and republishing one is an error, so without
+      # this the job would go red on every push that is not a version bump — and
+      # a routinely-red workflow is one people stop reading.
+      - name: Skip if this version is already published
+        id: check
+        run: |
+          set -euo pipefail
+          version=$(deno eval 'const c = JSON.parse(await Deno.readTextFile("deno.json")); console.log(c.version)')
+          code=$(curl -s -o /dev/null -w '%{http_code}' "https://jsr.io/@theozer/deno-lint-rules/${version}_meta.json")
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          [ "$code" = "200" ] && echo "already=true" >> "$GITHUB_OUTPUT" || echo "already=false" >> "$GITHUB_OUTPUT"
+          echo "version ${version}: jsr metadata HTTP ${code}"
+
+      - name: Publish
+        if: steps.check.outputs.already == 'false'
+        run: deno publish
+
+      # "Published" only means JSR accepted an upload. Confirm the version is
+      # actually served before treating this as success.
+      - name: Verify the published version is retrievable
+        if: steps.check.outputs.already == 'false'
+        run: |
+          set -euo pipefail
+          code=$(curl -s -o /dev/null -w '%{http_code}' \
+            "https://jsr.io/@theozer/deno-lint-rules/${{ steps.check.outputs.version }}_meta.json")
+          echo "post-publish metadata HTTP ${code}"
+          test "$code" = "200"
