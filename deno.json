@@ -1,22 +1,27 @@
 {
   "name": "@theozer/deno-lint-rules",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "license": "MIT",
-  "exports": "./mod.ts",
+  "exports": {
+    ".": "./mod.ts",
+    "./packages": "./packages.ts"
+  },
   "publish": {
     "include": [
       "LICENSE",
       "README.md",
       "mod.ts",
+      "packages.ts",
       "rules/no-bare-cross-package-specifier.ts",
+      "rules/no-relative-cross-package-import.ts",
       "rules/no-service-relative-package-import.ts"
     ]
   },
   "tasks": {
-    "check": "deno check mod.ts mod.test.ts",
+    "check": "deno check mod.ts packages.ts mod.test.ts entrypoints.test.ts",
     "fmt": "deno fmt --check",
     "lint": "deno lint",
-    "test": "deno test mod.test.ts"
+    "test": "deno test --allow-run mod.test.ts entrypoints.test.ts"
   },
   "fmt": {
     "lineWidth": 100
