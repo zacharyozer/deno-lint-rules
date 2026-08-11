@@ -24,8 +24,8 @@ jobs:
 
       - run: deno fmt --check
       - run: deno lint
-      - run: deno check mod.ts mod.test.ts
-      - run: deno test mod.test.ts
+      - run: deno check
+      - run: deno test --allow-run
 
       # JSR versions are immutable and republishing one is an error, so without
       # this the job would go red on every push that is not a version bump — and
