@@ -22,13 +22,18 @@ jobs:
         with:
           deno-version: "2.9.5"
 
-      - run: deno fmt --check
-      - run: deno lint
-      - run: deno check
+      # Every gate goes through `deno task`, never an inline command. When the
+      # workflow spelled its own flags, the task drifted to a narrower allowlist
+      # (`--allow-run` only) and to naming two test files explicitly. The task
+      # then failed locally while CI passed, and a new test file would have been
+      # silently skipped by the task. One definition, two callers.
+      - run: deno task fmt
+      - run: deno task lint
+      - run: deno task check
       # The exemption test writes a fixture tree to a temp dir and lints it, so it
       # needs read+write+run. A pinned allowlist that omits them fails only here,
       # never locally under --allow-all — the same shape as the dnt DENO_DIR bug.
-      - run: deno test --allow-run --allow-read --allow-write --allow-env
+      - run: deno task test
 
       # JSR versions are immutable and republishing one is an error, so without
       # this the job would go red on every push that is not a version bump — and
