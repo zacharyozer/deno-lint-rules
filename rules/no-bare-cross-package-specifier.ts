@@ -10,7 +10,14 @@ function isPackageFile(filename: string): boolean {
   const normalized = "/" + filename.replaceAll("\\", "/").replace(/^\/+/, "");
   // Test modules are outside published consumer import graphs, so their bare
   // specifiers cannot break resolution for a package consumer.
-  return normalized.includes("/packages/") && !normalized.endsWith(".test.ts");
+  // Both conventional Deno test suffixes. Exempting only ".test.ts" missed
+  // "_test.ts", which is the more common convention — it accounted for 157 of
+  // one repository's 296 diagnostics, and repo-hygiene (which ships these rules)
+  // uses "_test.ts" for all 204 of its test files.
+  if (normalized.endsWith(".test.ts") || normalized.endsWith("_test.ts")) {
+    return false;
+  }
+  return normalized.includes("/packages/");
 }
 
 function isBareScopedPackageSpecifier(specifier: string): boolean {
