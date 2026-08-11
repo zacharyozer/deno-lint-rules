@@ -1,13 +1,11 @@
 /** The rule implementation for `theozer/no-service-relative-package-import`. */
 
+import { extractLiteralImportSpecifier } from "./import-specifier.ts";
+
 const MESSAGE = "Services and apps must import packages through their declared package " +
   "names, not relative paths into `packages/`.";
 
 const HINT = "Replace the relative specifier with the package's declared import name.";
-
-type SourceDeclaration = {
-  source?: { value?: unknown } | null;
-};
 
 function normalize(filename: string): string {
   return "/" + filename.replaceAll("\\", "/").replace(/^\/+/, "");
@@ -45,16 +43,16 @@ type LintRule = Deno.lint.Plugin["rules"][string];
 /** Reports relative service and app imports that reach into `packages/`. */
 export const noServiceRelativePackageImportRule: LintRule = {
   create(context) {
-    const check = (node: SourceDeclaration) => {
-      const specifier = node.source?.value;
+    const check = (node: unknown) => {
+      const specifier = extractLiteralImportSpecifier(node);
       if (
-        typeof specifier !== "string" ||
-        !isRelativePackageImport(context.filename, specifier)
+        specifier === undefined ||
+        !isRelativePackageImport(context.filename, specifier.value)
       ) {
         return;
       }
       context.report({
-        node: node.source as Deno.lint.Node,
+        node: specifier.node,
         message: MESSAGE,
         hint: HINT,
       });
@@ -64,6 +62,8 @@ export const noServiceRelativePackageImportRule: LintRule = {
       ImportDeclaration: check,
       ExportAllDeclaration: check,
       ExportNamedDeclaration: check,
+      ImportExpression: check,
+      TSImportType: check,
     };
   },
 };

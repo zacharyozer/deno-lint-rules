@@ -1,8 +1,10 @@
 import { deepStrictEqual, strictEqual } from "node:assert";
 
 import plugin from "./mod.ts";
+import packagesPlugin from "./packages.ts";
 
 const NO_BARE = "theozer/no-bare-cross-package-specifier";
+const NO_RELATIVE = "theozer/no-relative-cross-package-import";
 const NO_SERVICE_RELATIVE = "theozer/no-service-relative-package-import";
 
 function diagnosticIds(filename: string, source: string): string[] {
@@ -96,3 +98,153 @@ Deno.test("no-service-relative-package-import accepts compliant source", () => {
     [],
   );
 });
+
+type ImportFormCase = {
+  name: string;
+  plugin: Deno.lint.Plugin;
+  diagnostic: string;
+  filename: string;
+  specifier: string;
+  staticSource: string;
+  staticRanges: Array<[number, number]>;
+};
+
+const IMPORT_FORM_CASES: ImportFormCase[] = [
+  {
+    name: "no-bare-cross-package-specifier",
+    plugin,
+    diagnostic: NO_BARE,
+    filename: "packages/example/src/mod.ts",
+    specifier: "@example/one",
+    staticSource:
+      'import { one } from "@example/one";\nexport * from "@example/two";\nexport { three } from "@example/three";',
+    staticRanges: [[20, 34], [50, 64], [88, 104]],
+  },
+  {
+    name: "no-relative-cross-package-import",
+    plugin: packagesPlugin,
+    diagnostic: NO_RELATIVE,
+    filename: "packages/one/src/mod.ts",
+    specifier: "../../two/mod.ts",
+    staticSource:
+      'import { one } from "../../two/mod.ts";\nexport * from "../../three/mod.ts";\nexport { four } from "../../four/mod.ts";',
+    staticRanges: [[20, 38], [54, 74], [97, 116]],
+  },
+  {
+    name: "no-service-relative-package-import",
+    plugin,
+    diagnostic: NO_SERVICE_RELATIVE,
+    filename: "services/example/src/mod.ts",
+    specifier: "../../../packages/one/mod.ts",
+    staticSource:
+      'import { one } from "../../../packages/one/mod.ts";\nexport * from "../../../packages/two/mod.ts";\nexport { three } from "../../../packages/three/mod.ts";',
+    staticRanges: [[20, 50], [66, 96], [120, 152]],
+  },
+];
+
+Deno.test("the import-form rule matrix covers all three published rules", () => {
+  strictEqual(IMPORT_FORM_CASES.length, 3, "import-form matrix must contain exactly three cases");
+});
+
+for (const testCase of IMPORT_FORM_CASES) {
+  Deno.test(`${testCase.name} preserves static import and export diagnostics`, () => {
+    const diagnostics = Deno.lint.runPlugin(
+      testCase.plugin,
+      testCase.filename,
+      testCase.staticSource,
+    );
+
+    deepStrictEqual(
+      diagnostics.map((diagnostic) => diagnostic.id),
+      [testCase.diagnostic, testCase.diagnostic, testCase.diagnostic],
+    );
+    deepStrictEqual(
+      diagnostics.map((diagnostic) => diagnostic.range),
+      testCase.staticRanges,
+    );
+  });
+
+  Deno.test(`${testCase.name} reports a literal dynamic import`, () => {
+    deepStrictEqual(
+      Deno.lint.runPlugin(
+        testCase.plugin,
+        testCase.filename,
+        `await import("${testCase.specifier}");`,
+      ).map((diagnostic) => diagnostic.id),
+      [testCase.diagnostic],
+    );
+  });
+
+  Deno.test(`${testCase.name} reports one type-position import diagnostic`, () => {
+    const diagnostics = Deno.lint.runPlugin(
+      testCase.plugin,
+      testCase.filename,
+      `type Imported = import("${testCase.specifier}").Thing;`,
+    );
+    deepStrictEqual(diagnostics.map((diagnostic) => diagnostic.id), [testCase.diagnostic]);
+  });
+
+  Deno.test(`${testCase.name} skips non-literal dynamic imports`, () => {
+    deepStrictEqual(
+      Deno.lint.runPlugin(
+        testCase.plugin,
+        testCase.filename,
+        [
+          "declare const specifier: string;",
+          "await import(specifier);",
+          `await import(\`${testCase.specifier}\`);`,
+        ].join("\n"),
+      ),
+      [],
+    );
+  });
+}
+
+const PACKAGE_EXEMPTION_CASES = [
+  {
+    name: "no-bare-cross-package-specifier",
+    plugin,
+    diagnostic: NO_BARE,
+    directory: "packages/example/src",
+    specifier: "@example/one",
+  },
+  {
+    name: "no-relative-cross-package-import",
+    plugin: packagesPlugin,
+    diagnostic: NO_RELATIVE,
+    directory: "packages/one/src",
+    specifier: "../../two/mod.ts",
+  },
+];
+
+Deno.test("the package-rule exemption matrix covers both package rules", () => {
+  strictEqual(
+    PACKAGE_EXEMPTION_CASES.length,
+    2,
+    "package-rule exemption matrix must contain exactly two cases",
+  );
+});
+
+for (const testCase of PACKAGE_EXEMPTION_CASES) {
+  Deno.test(`${testCase.name} exempts both test suffixes for new import forms`, () => {
+    const source = [
+      `await import("${testCase.specifier}");`,
+      `type Imported = import("${testCase.specifier}").Thing;`,
+    ].join("\n");
+    const filenames: Array<[string, string[]]> = [
+      ["violation.ts", [testCase.diagnostic, testCase.diagnostic]],
+      ["violation.test.ts", []],
+      ["violation_test.ts", []],
+    ];
+    strictEqual(filenames.length, 3, "suffix matrix must contain exactly three cases");
+
+    for (const [filename, expected] of filenames) {
+      deepStrictEqual(
+        Deno.lint.runPlugin(testCase.plugin, `${testCase.directory}/${filename}`, source)
+          .map((diagnostic) => diagnostic.id),
+        expected,
+        filename,
+      );
+    }
+  });
+}

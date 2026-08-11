@@ -11,17 +11,17 @@ Use the default entry when repository modules are served as raw `.ts` files over
 
 ```json
 "lint": {
-  "plugins": ["jsr:@theozer/deno-lint-rules@0.2.0"]
+  "plugins": ["jsr:@theozer/deno-lint-rules@0.3.0"]
 }
 ```
 
 It enables exactly these rules:
 
-- `theozer/no-bare-cross-package-specifier` rejects every bare scoped specifier such as
-  `@example/shared` from publishable package modules. Use an explicit `jsr:` or `npm:` specifier
-  instead.
+- `theozer/no-bare-cross-package-specifier` rejects bare scoped specifiers such as `@example/shared`
+  in static imports and exports, literal dynamic imports, and type-position imports from publishable
+  package modules. Use an explicit `jsr:` or `npm:` specifier instead.
 - `theozer/no-service-relative-package-import` prevents services and apps from reaching into a
-  repository's `packages/` tree by relative path.
+  repository's `packages/` tree by relative path through those same import forms.
 
 ### Repositories publishing packages to a registry
 
@@ -29,16 +29,17 @@ Use the `/packages` entry when sibling packages are installed as declared regist
 
 ```json
 "lint": {
-  "plugins": ["jsr:@theozer/deno-lint-rules@0.2.0/packages"]
+  "plugins": ["jsr:@theozer/deno-lint-rules@0.3.0/packages"]
 }
 ```
 
 It enables exactly these rules:
 
-- `theozer/no-relative-cross-package-import` rejects relative imports that cross from one package
-  into another. Use the target package's declared registry specifier instead.
+- `theozer/no-relative-cross-package-import` rejects relative specifiers in static imports and
+  exports, literal dynamic imports, and type-position imports that cross from one package into
+  another. Use the target package's declared registry specifier instead.
 - `theozer/no-service-relative-package-import` prevents services and apps from reaching into a
-  repository's `packages/` tree by relative path.
+  repository's `packages/` tree by relative path through those same import forms.
 
 Both entries allow relative imports that stay within the same package. They intentionally disagree
 on cross-package imports: the default entry allows relative paths and rejects bare scoped
@@ -52,7 +53,7 @@ Keep the plugin loaded and add the rule's full diagnostic name to `lint.rules.ex
 ```json
 {
   "lint": {
-    "plugins": ["jsr:@theozer/deno-lint-rules@0.2.0"],
+    "plugins": ["jsr:@theozer/deno-lint-rules@0.3.0"],
     "rules": {
       "exclude": ["theozer/no-service-relative-package-import"]
     }
