@@ -1,6 +1,6 @@
 {
   "name": "@theozer/deno-lint-rules",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "license": "MIT",
   "exports": {
     ".": "./mod.ts",
@@ -28,7 +28,10 @@
   },
   "lint": {
     "rules": {
-      "tags": ["recommended", "jsr"]
+      "tags": [
+        "recommended",
+        "jsr"
+      ]
     }
   }
 }

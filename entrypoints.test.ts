@@ -129,3 +129,49 @@ for (const testCase of CASES) {
     },
   });
 }
+
+Deno.test("both conventional Deno test suffixes are exempt, non-test still flags", async () => {
+  // Exempting only ".test.ts" missed "_test.ts", the more common convention.
+  // That was 157 of one repository's 296 diagnostics, and repo-hygiene — which
+  // ships these rules — names all 204 of its test files "_test.ts".
+  const cases: Array<[string, boolean]> = [
+    ["violation.ts", true],
+    ["violation.test.ts", false],
+    ["violation_test.ts", false],
+  ];
+  strictEqual(cases.length, 3, "exemption fixture list must not be empty");
+
+  const root = await Deno.makeTempDir({ prefix: "lint-exempt-" });
+  try {
+    await Deno.mkdir(`${root}/packages/alpha/src`, { recursive: true });
+    await Deno.mkdir(`${root}/packages/beta`, { recursive: true });
+    await Deno.writeTextFile(`${root}/packages/beta/mod.ts`, "export const b = 1;\n");
+    for (const [name] of cases) {
+      await Deno.writeTextFile(
+        `${root}/packages/alpha/src/${name}`,
+        'import { b } from "../../beta/mod.ts";\nexport const c = b;\n',
+      );
+    }
+    await Deno.writeTextFile(
+      `${root}/deno.json`,
+      JSON.stringify({
+        lint: { plugins: [new URL("./packages.ts", import.meta.url).href] },
+      }),
+    );
+    const out = await new Deno.Command("deno", {
+      args: ["lint", "--json"],
+      cwd: root,
+      stdout: "piped",
+      stderr: "null",
+    }).output();
+    const flagged = new Set(
+      (JSON.parse(new TextDecoder().decode(out.stdout)).diagnostics ?? [])
+        .map((d: { filename: string }) => d.filename.split("/").pop()),
+    );
+    for (const [name, shouldFlag] of cases) {
+      strictEqual(flagged.has(name), shouldFlag, `${name} flagged=${flagged.has(name)}`);
+    }
+  } finally {
+    await Deno.remove(root, { recursive: true });
+  }
+});
