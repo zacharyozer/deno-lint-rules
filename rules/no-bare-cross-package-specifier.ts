@@ -1,5 +1,7 @@
 /** The rule implementation for `theozer/no-bare-cross-package-specifier`. */
 
+import { extractLiteralImportSpecifier } from "./import-specifier.ts";
+
 const MESSAGE = "Packages must not import another package through a bare workspace " +
   "specifier. Use that package's permitted boundary instead.";
 
@@ -31,16 +33,13 @@ export const noBareCrossPackageSpecifierRule: LintRule = {
   create(context) {
     if (!isPackageFile(context.filename)) return {};
 
-    const check = (node: { source?: { value?: unknown } | null }) => {
-      const specifier = node.source?.value;
-      if (
-        typeof specifier !== "string" ||
-        !isBareScopedPackageSpecifier(specifier)
-      ) {
+    const check = (node: unknown) => {
+      const specifier = extractLiteralImportSpecifier(node);
+      if (specifier === undefined || !isBareScopedPackageSpecifier(specifier.value)) {
         return;
       }
       context.report({
-        node: node.source as Deno.lint.Node,
+        node: specifier.node,
         message: MESSAGE,
         hint: HINT,
       });
@@ -50,6 +49,8 @@ export const noBareCrossPackageSpecifierRule: LintRule = {
       ImportDeclaration: check,
       ExportAllDeclaration: check,
       ExportNamedDeclaration: check,
+      ImportExpression: check,
+      TSImportType: check,
     };
   },
 };

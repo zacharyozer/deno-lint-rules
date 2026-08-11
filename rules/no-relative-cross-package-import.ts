@@ -1,5 +1,7 @@
 /** The rule implementation for `theozer/no-relative-cross-package-import`. */
 
+import { extractLiteralImportSpecifier } from "./import-specifier.ts";
+
 const MESSAGE = "Packages must not import another package through a relative path. " +
   "Use that package's declared workspace specifier instead.";
 
@@ -52,12 +54,6 @@ function normalizePath(path: string): string {
   return parts.join("/");
 }
 
-function literalSpecifier(source: unknown): string | undefined {
-  if (typeof source !== "object" || source === null) return;
-  const value = (source as { value?: unknown }).value;
-  return typeof value === "string" ? value : undefined;
-}
-
 type LintRule = Deno.lint.Plugin["rules"][string];
 
 /** Reports relative imports that cross from one publishable package into another. */
@@ -69,18 +65,18 @@ export const noRelativeCrossPackageImportRule: LintRule = {
     // configuration was already deployed. This package names the npm-era
     // contract accurately: it forbids relative package crossings; bare
     // workspace specifiers are the required boundary.
-    const check = (node: { source?: unknown }) => {
-      const specifier = literalSpecifier(node.source);
+    const check = (node: unknown) => {
+      const specifier = extractLiteralImportSpecifier(node);
       if (
         specifier === undefined || !relativeCrossesPackageBoundary(
           context.filename,
-          specifier,
+          specifier.value,
         )
       ) {
         return;
       }
       context.report({
-        node: node.source as Deno.lint.Node,
+        node: specifier.node,
         message: MESSAGE,
         hint: HINT,
       });
@@ -91,6 +87,7 @@ export const noRelativeCrossPackageImportRule: LintRule = {
       ExportAllDeclaration: check,
       ExportNamedDeclaration: check,
       ImportExpression: check,
+      TSImportType: check,
     };
   },
 };
