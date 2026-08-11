@@ -25,7 +25,10 @@ jobs:
       - run: deno fmt --check
       - run: deno lint
       - run: deno check
-      - run: deno test --allow-run
+      # The exemption test writes a fixture tree to a temp dir and lints it, so it
+      # needs read+write+run. A pinned allowlist that omits them fails only here,
+      # never locally under --allow-all — the same shape as the dnt DENO_DIR bug.
+      - run: deno test --allow-run --allow-read --allow-write --allow-env
 
       # JSR versions are immutable and republishing one is an error, so without
       # this the job would go red on every push that is not a version bump — and
