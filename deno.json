@@ -19,10 +19,10 @@
     ]
   },
   "tasks": {
-    "check": "deno check mod.ts packages.ts mod.test.ts entrypoints.test.ts",
+    "check": "deno check",
     "fmt": "deno fmt --check",
     "lint": "deno lint",
-    "test": "deno test --allow-run mod.test.ts entrypoints.test.ts"
+    "test": "deno test --allow-run --allow-read --allow-write --allow-env"
   },
   "fmt": {
     "lineWidth": 100
