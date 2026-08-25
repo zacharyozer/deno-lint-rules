@@ -1,6 +1,6 @@
 {
   "name": "@theozer/deno-lint-rules",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "license": "MIT",
   "exports": {
     ".": "./mod.ts",
@@ -15,7 +15,10 @@
       "rules/import-specifier.ts",
       "rules/no-bare-cross-package-specifier.ts",
       "rules/no-relative-cross-package-import.ts",
-      "rules/no-service-relative-package-import.ts"
+      "rules/no-service-relative-package-import.ts",
+      "rules/no-unsafe-terraform-alert-payload.ts",
+      "rules/terraform-alert-contract.ts",
+      "rules/terraform-alert-contract-text.ts"
     ]
   },
   "tasks": {
