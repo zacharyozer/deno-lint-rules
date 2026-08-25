@@ -16,6 +16,9 @@ Deno.test("the aggregate enables every rule by default", () => {
   deepStrictEqual(Object.keys(plugin.rules).sort(), [
     "no-bare-cross-package-specifier",
     "no-service-relative-package-import",
+    "no-terraform-alert-env",
+    "no-terraform-alert-placement",
+    "no-terraform-content-gate",
     "no-unsafe-terraform-alert-payload",
   ]);
 });
