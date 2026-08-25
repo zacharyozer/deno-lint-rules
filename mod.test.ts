@@ -6,6 +6,7 @@ import packagesPlugin from "./packages.ts";
 const NO_BARE = "theozer/no-bare-cross-package-specifier";
 const NO_RELATIVE = "theozer/no-relative-cross-package-import";
 const NO_SERVICE_RELATIVE = "theozer/no-service-relative-package-import";
+const NO_UNSAFE_TERRAFORM_ALERT_PAYLOAD = "theozer/no-unsafe-terraform-alert-payload";
 
 function diagnosticIds(filename: string, source: string): string[] {
   return Deno.lint.runPlugin(plugin, filename, source).map((diagnostic) => diagnostic.id);
@@ -15,7 +16,102 @@ Deno.test("the aggregate enables every rule by default", () => {
   deepStrictEqual(Object.keys(plugin.rules).sort(), [
     "no-bare-cross-package-specifier",
     "no-service-relative-package-import",
+    "no-unsafe-terraform-alert-payload",
   ]);
+});
+
+Deno.test("no-unsafe-terraform-alert-payload is target-scoped and non-vacuous", () => {
+  deepStrictEqual(
+    diagnosticIds("scripts/other.ts", "export const value = true;"),
+    [],
+    "non-target files are genuinely inapplicable",
+  );
+  deepStrictEqual(
+    diagnosticIds("scripts/terraform-destroy-guard.ts", "export const value = true;"),
+    [NO_UNSAFE_TERRAFORM_ALERT_PAYLOAD],
+    "the target file cannot pass without an examined contract",
+  );
+});
+
+const SAFE_TERRAFORM_ALERT_SOURCE = [
+  "const SafeResourceSchema = z.object({",
+  "  address: z.string().min(1).max(256).refine(isSafeTerraformAddress),",
+  '  action: z.enum(["create", "update", "delete", "replace"]),',
+  "}).strict();",
+  "const SafeResourcesSchema = z.array(SafeResourceSchema);",
+  "function parseSafeResources(input: string) {",
+  "  return SafeResourcesSchema.parse(JSON.parse(input));",
+  "}",
+  "async function readAlertResources() {",
+  '  const resources = parseSafeResources(await Deno.readTextFile("resources.json"));',
+  "  return { resources, totalResources: resources.length };",
+  "}",
+  "function parseAlertIdentity(env: Record<string, string>, root: string) {",
+  "  const repository = env.GITHUB_REPOSITORY;",
+  "  const parsed = AlertRepositorySchema.safeParse(repository);",
+  "  if (ALLOWED_REPOSITORY_ROOTS[parsed.data] !== root) return;",
+  "  const runId = env.GITHUB_RUN_ID;",
+  "  const eventName = env.GITHUB_EVENT_NAME;",
+  "  return { fullRepository: repository, runId, trigger: eventName };",
+  "}",
+  "async function executeTerraformAlert(args: string[], dependencies: Record<string, unknown>) {",
+  "  const options = parseSendArgs(args);",
+  "  const root = options.root;",
+  "  const identity = parseAlertIdentity(env, root);",
+  '  if (identity === undefined) return failedAlert("notify-identity");',
+  "  const runUrl = identity.fullRepository + identity.runId;",
+  "  const pullRequestUrl = await readPullRequestUrl(env, identity.fullRepository);",
+  "  const { resources, totalResources } = await readAlertResources();",
+  "  const body = JSON.stringify({",
+  '    kind: "terraform-alert",',
+  "    trigger: identity.trigger,",
+  "    repository: identity.repository,",
+  "    root,",
+  "    runId: identity.runId,",
+  "    totalResources,",
+  "    resources,",
+  "    runUrl,",
+  "    pullRequestUrl,",
+  "  });",
+  '  if (new TextEncoder().encode(body).length > MAX_ALERT_REQUEST_BYTES) return failedAlert("notify-resources");',
+  "  await (dependencies.fetch ?? fetch)(notifyUrl, {",
+  '    method: "POST",',
+  "    headers: {",
+  '      "x-repo-hygiene-terraform-trigger": identity.trigger,',
+  '      "x-repo-hygiene-terraform-repository": identity.repository,',
+  "    },",
+  "    body,",
+  "  });",
+  "}",
+].join("\n");
+
+Deno.test("no-unsafe-terraform-alert-payload follows the actual body and fetch path", () => {
+  deepStrictEqual(
+    diagnosticIds("scripts/terraform-destroy-guard.ts", SAFE_TERRAFORM_ALERT_SOURCE),
+    [],
+  );
+  const mutations = [
+    SAFE_TERRAFORM_ALERT_SOURCE.replace(
+      '"x-repo-hygiene-terraform-trigger": identity.trigger',
+      '"x-repo-hygiene-terraform-trigger": "drift"',
+    ),
+    SAFE_TERRAFORM_ALERT_SOURCE.replace(
+      "const SafeResourcesSchema = z.array(SafeResourceSchema);",
+      "",
+    ),
+    SAFE_TERRAFORM_ALERT_SOURCE.replace(
+      'if (new TextEncoder().encode(body).length > MAX_ALERT_REQUEST_BYTES) return failedAlert("notify-resources");',
+      "void body;",
+    ),
+  ];
+  strictEqual(mutations.length, 3, "F3 mutation cases must not be empty");
+  for (const mutated of mutations) {
+    strictEqual(mutated === SAFE_TERRAFORM_ALERT_SOURCE, false, "mutation changed no bytes");
+    deepStrictEqual(
+      diagnosticIds("scripts/terraform-destroy-guard.ts", mutated),
+      [NO_UNSAFE_TERRAFORM_ALERT_PAYLOAD],
+    );
+  }
 });
 
 Deno.test("no-bare-cross-package-specifier reports violations", () => {
@@ -142,7 +238,7 @@ const IMPORT_FORM_CASES: ImportFormCase[] = [
   },
 ];
 
-Deno.test("the import-form rule matrix covers all three published rules", () => {
+Deno.test("the import-form rule matrix covers all three import-specifier rules", () => {
   strictEqual(IMPORT_FORM_CASES.length, 3, "import-form matrix must contain exactly three cases");
 });
 

@@ -6,13 +6,15 @@
 
 import { noBareCrossPackageSpecifierRule } from "./rules/no-bare-cross-package-specifier.ts";
 import { noServiceRelativePackageImportRule } from "./rules/no-service-relative-package-import.ts";
+import { noUnsafeTerraformAlertPayloadRule } from "./rules/no-unsafe-terraform-alert-payload.ts";
 
-/** Both fleet package-boundary rules, enabled by default. */
+/** Default-on fleet rules for plain TypeScript repositories. */
 const plugin: Deno.lint.Plugin = {
   name: "theozer",
   rules: {
     "no-bare-cross-package-specifier": noBareCrossPackageSpecifierRule,
     "no-service-relative-package-import": noServiceRelativePackageImportRule,
+    "no-unsafe-terraform-alert-payload": noUnsafeTerraformAlertPayloadRule,
   },
 };
 
